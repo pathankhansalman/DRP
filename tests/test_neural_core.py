@@ -34,10 +34,22 @@ class TestKernelNeuron:
         assert neuron.forward() is False
         assert neuron.output == 0
 
-    def test_forward_sensor_neuron_fires_by_default(self):
+    def test_forward_sensor_preserves_injected_output(self):
+        # Sensors take their output from KernelGraph.forward_pass, so
+        # calling forward() directly should not overwrite it.
         neuron = KernelNeuron("sensor", inputs=[])
+        assert neuron.forward() is False
+        neuron.output = 1
         assert neuron.forward() is True
         assert neuron.output == 1
+
+    def test_is_sensor_property(self):
+        sensor = KernelNeuron("s", inputs=[])
+        downstream = KernelNeuron(
+            "d", inputs=[{"ref": "s", "weight": 1.0, "signal": 0.0}]
+        )
+        assert sensor.is_sensor is True
+        assert downstream.is_sensor is False
 
     def test_compute_loss_zero_when_outcome_missing(self):
         neuron = KernelNeuron("n1", intent_metrics={"x": 10})
@@ -143,6 +155,65 @@ class TestKernelGraph:
         graph.backward_pass("out", loss_gradient=1.0, learning_rate=0.1)
         # weight -= 0.1 * 1.0 * 1.0 = 0.1  →  0.6 - 0.1 = 0.5
         assert graph.neurons["out"].inputs[0]["weight"] == pytest.approx(0.5)
+
+    def test_backward_pass_force_updates_silent_neuron(self):
+        graph = KernelGraph()
+        graph.add_neuron("a", inputs=[])
+        graph.add_neuron(
+            "out",
+            inputs=[{"ref": "a", "weight": 0.1, "signal": 1.0}],
+            threshold=0.5,
+        )
+        graph.forward_pass({"a": 1.0})
+        assert graph.neurons["out"].output == 0
+        graph.backward_pass(
+            "out", loss_gradient=1.0, learning_rate=0.1, force=True
+        )
+        # Even though silent, force=True applies the update.
+        assert graph.neurons["out"].inputs[0]["weight"] == pytest.approx(0.0)
+
+    def test_topological_order_sources_first(self):
+        graph = KernelGraph()
+        # Add in non-topological order to confirm sort.
+        graph.add_neuron(
+            "out",
+            inputs=[{"ref": "mid", "weight": 1.0, "signal": 0.0}],
+        )
+        graph.add_neuron(
+            "mid",
+            inputs=[{"ref": "src", "weight": 1.0, "signal": 0.0}],
+        )
+        graph.add_neuron("src", inputs=[])
+        order = graph.topological_order()
+        assert order.index("src") < order.index("mid") < order.index("out")
+
+    def test_topological_order_rejects_cycle(self):
+        graph = KernelGraph()
+        graph.add_neuron("a", inputs=[{"ref": "b", "weight": 1.0, "signal": 0.0}])
+        graph.add_neuron("b", inputs=[{"ref": "a", "weight": 1.0, "signal": 0.0}])
+        with pytest.raises(ValueError, match="cycle"):
+            graph.topological_order()
+
+    def test_forward_pass_propagates_through_multiple_layers(self):
+        graph = KernelGraph()
+        graph.add_neuron("src", inputs=[])
+        graph.add_neuron(
+            "mid",
+            inputs=[{"ref": "src", "weight": 1.0, "signal": 0.0}],
+            threshold=0.5,
+        )
+        graph.add_neuron(
+            "out",
+            inputs=[{"ref": "mid", "weight": 1.0, "signal": 0.0}],
+            threshold=0.5,
+        )
+        # mid emits its pre-activation (1.0); out should fire.
+        outputs = graph.forward_pass({"src": 1.0})
+        assert outputs == {"src": 1, "mid": 1, "out": 1}
+
+    def test_to_dict_preserves_empty_outcome_metric(self):
+        neuron = KernelNeuron("n", outcome_metric={})
+        assert neuron.to_dict()["outcome_metric"] == {}
 
 
 # ---------------------------------------------------------------------------
