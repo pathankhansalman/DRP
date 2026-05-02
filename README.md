@@ -138,40 +138,86 @@ at that version. Schema-only validation is not sufficient; see
 
 ## drp-validate CLI
 
-Install the package and use the unified CLI:
+Install the package (PEP 517 / `pyproject.toml`) and use the unified CLI:
 
 ```sh
 pip install .
 drp-validate validate examples/*.json
 drp-validate lint examples/*.json
+drp-validate rules
 ```
+
+A bare `drp-validate <path>` defaults to the `validate` subcommand for
+backward compatibility with the standalone validator script.
 
 ### Commands
 
-- `drp-validate validate <paths...>`: run validator on one or more JSON files or glob patterns.
-- `drp-validate lint <paths...>`: run non-blocking lint checks for DRP best practices.
+- `drp-validate validate <paths...>` -- run the reference validator on
+  one or more JSON files or glob patterns. Pass `--lint` to also run the
+  linter against the same files.
+- `drp-validate lint <paths...>` -- run non-blocking lint checks for DRP
+  style and best-practice issues.
+- `drp-validate rules` -- list registered lint rules and their
+  severities.
 
 ### Output formats
 
-- `--format human` (default): colorized terminal output.
-- `--format json`: machine-readable structured output.
+- `--format human` (default): human-readable text. ANSI colors are
+  enabled when stdout is a TTY; honor `NO_COLOR` / `FORCE_COLOR` env
+  vars or pass `--no-color` to disable.
+- `--format json`: machine-readable structured output suitable for CI
+  pipelines and tool integrations.
+
+### Filters
+
+- `--min-severity {info,style,best_practice}`: drop warnings below the
+  given severity (default: `info`).
+- `--rule RULE_ID` (repeatable): only run the listed rules.
+- `--disable-rule RULE_ID` (repeatable): skip the listed rules.
+- `--quiet`: omit per-file lines for clean / passing files; only print
+  failures, warnings, and the summary.
 
 ### Exit codes
 
-- `0`: success.
-- `1`: validation errors found.
-- `2`: CLI usage/input error.
-- `3`: lint warnings promoted to failure via `--fail-on-warn`.
+| Code | Meaning |
+|------|---------|
+| `0`  | success |
+| `1`  | one or more validation errors |
+| `2`  | CLI usage / input error (missing file, bad JSON, bad flag) |
+| `3`  | lint warnings promoted to failure via `--fail-on-warn` |
 
 ### Examples
 
 ```sh
 # Validate all examples
- drp-validate validate examples/*.json
+drp-validate validate examples/*.json
 
 # Validate and lint together
- drp-validate validate --lint examples/*.json
+drp-validate validate --lint examples/*.json
 
-# Lint and fail CI when warnings exist
- drp-validate lint --fail-on-warn examples/*.json
+# Fail CI when any lint warnings exist
+drp-validate lint --fail-on-warn examples/*.json
+
+# Only run high-severity rules
+drp-validate lint examples/*.json --min-severity best_practice
+
+# Skip a noisy rule
+drp-validate lint examples/*.json --disable-rule DRP006
+
+# Machine-readable output
+drp-validate validate examples/*.json --format json
 ```
+
+### Lint rules
+
+| ID      | Severity        | What it checks |
+|---------|-----------------|----------------|
+| DRP001  | style           | `record_id` follows `<prefix>-<id>` with a digit in the suffix |
+| DRP002  | best_practice   | completed decisions include a non-empty `rationale` |
+| DRP003  | style           | `context` is at least 30 characters long |
+| DRP004  | style           | `rationale`, when present, is at least 20 characters long |
+| DRP005  | best_practice   | at least two `options` are recorded |
+| DRP006  | info            | `tags` are present and non-empty |
+| DRP007  | info            | `metadata.author` is set |
+| DRP008  | best_practice   | `timestamp` is not in the future |
+| DRP009  | best_practice   | `supersedes_record_id` is paired with `status='superseded'` (or `'complete'`) |
