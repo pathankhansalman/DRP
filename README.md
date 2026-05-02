@@ -135,3 +135,43 @@ A system is DRP-conformant at version `X.Y.Z` if every record it produces
 validates successfully against the schema **and** the reference validator
 at that version. Schema-only validation is not sufficient; see
 [VALIDATION.md](docs/VALIDATION.md).
+
+## drp-validate CLI
+
+Install the package and use the unified CLI:
+
+```sh
+pip install .
+drp-validate validate examples/*.json
+drp-validate lint examples/*.json
+```
+
+### Commands
+
+- `drp-validate validate <paths...>`: run validator on one or more JSON files or glob patterns.
+- `drp-validate lint <paths...>`: run non-blocking lint checks for DRP best practices.
+
+### Output formats
+
+- `--format human` (default): colorized terminal output.
+- `--format json`: machine-readable structured output.
+
+### Exit codes
+
+- `0`: success.
+- `1`: validation errors found.
+- `2`: CLI usage/input error.
+- `3`: lint warnings promoted to failure via `--fail-on-warn`.
+
+### Examples
+
+```sh
+# Validate all examples
+ drp-validate validate examples/*.json
+
+# Validate and lint together
+ drp-validate validate --lint examples/*.json
+
+# Lint and fail CI when warnings exist
+ drp-validate lint --fail-on-warn examples/*.json
+```

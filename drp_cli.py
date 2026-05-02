@@ -8,7 +8,7 @@ import json
 import sys
 from typing import Iterable
 
-from linter import LintWarning, lint_data
+from linter import lint_data
 from tools import drp_validator
 
 GREEN = "\033[32m"
@@ -56,8 +56,7 @@ def _validate_files(paths: list[str]) -> tuple[int, dict]:
 
 
 def _lint_files(paths: list[str]) -> tuple[int, dict]:
-    payload = {"status": "OK", "files": []}
-    warning_count = 0
+    payload = {"status": "OK", "files": [], "warning_count": 0}
     for path in paths:
         try:
             with open(path, "r", encoding="utf-8") as fh:
@@ -66,41 +65,33 @@ def _lint_files(paths: list[str]) -> tuple[int, dict]:
         except (OSError, json.JSONDecodeError) as exc:
             payload["files"].append({"path": path, "warnings": [], "skipped": str(exc)})
             continue
-        warning_count += len(warnings)
-        payload["files"].append({
-            "path": path,
-            "warnings": [w.__dict__ for w in warnings],
-        })
-    payload["warning_count"] = warning_count
+        payload["warning_count"] += len(warnings)
+        payload["files"].append({"path": path, "warnings": [w.__dict__ for w in warnings]})
     return EXIT_OK, payload
 
 
 def _print_human_validate(payload: dict) -> None:
-    for file_result in payload["files"]:
-        path = file_result["path"]
-        if file_result["ok"]:
-            print(f"{GREEN}{path}: ✅ valid{RESET}")
+    for item in payload["files"]:
+        if item["ok"]:
+            print(f"{GREEN}{item['path']}: ✅ valid{RESET}")
         else:
-            print(f"{RED}{path}: ❌ errors: {len(file_result['errors'])}{RESET}")
-            for err in file_result["errors"]:
+            print(f"{RED}{item['path']}: ❌ errors: {len(item['errors'])}{RESET}")
+            for err in item["errors"]:
                 print(f"  - {err}")
 
 
 def _print_human_lint(payload: dict) -> None:
-    for file_result in payload["files"]:
-        path = file_result["path"]
-        skipped = file_result.get("skipped")
-        if skipped:
-            print(f"{YELLOW}{path}: lint skipped ({skipped}){RESET}")
+    for item in payload["files"]:
+        if "skipped" in item:
+            print(f"{YELLOW}{item['path']}: lint skipped ({item['skipped']}){RESET}")
             continue
-        warnings: list[LintWarning | dict] = file_result["warnings"]
+        warnings = item["warnings"]
         if warnings:
-            print(f"{YELLOW}{path}: warnings: {len(warnings)}{RESET}")
+            print(f"{YELLOW}{item['path']}: warnings: {len(warnings)}{RESET}")
             for warning in warnings:
-                if isinstance(warning, dict):
-                    print(f"  - [{warning['rule_id']}] [{warning['severity']}] {warning['field']}: {warning['message']}")
+                print(f"  - [{warning['rule_id']}] [{warning['severity']}] {warning['field']}: {warning['message']}")
         else:
-            print(f"{GREEN}{path}: lint clean{RESET}")
+            print(f"{GREEN}{item['path']}: lint clean{RESET}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -114,7 +105,6 @@ def main(argv: list[str] | None = None) -> int:
     validate_parser = subparsers.add_parser("validate", help="Validate DRP JSON files")
     validate_parser.add_argument("paths", nargs="+", help="JSON files or glob patterns")
     validate_parser.add_argument("--format", choices=["human", "json"], default="human")
-    validate_parser.add_argument("--strict", action="store_true", help="Reserved strict mode")
     validate_parser.add_argument("--lint", action="store_true", help="Also run lint checks")
     validate_parser.add_argument("--fail-on-warn", action="store_true", help="Return non-zero when lint warnings exist")
 
@@ -124,7 +114,6 @@ def main(argv: list[str] | None = None) -> int:
     lint_parser.add_argument("--fail-on-warn", action="store_true", help="Return non-zero when warnings exist")
 
     args = parser.parse_args(argv)
-
     paths = _expand_paths(args.paths)
 
     if args.command == "validate":
@@ -133,14 +122,14 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(validate_payload, ensure_ascii=False))
         else:
             _print_human_validate(validate_payload)
-
         if args.lint:
             _, lint_payload = _lint_files(paths)
             if args.format == "json":
+                print()
                 print(json.dumps(lint_payload, ensure_ascii=False))
             else:
                 _print_human_lint(lint_payload)
-            if args.fail_on_warn and lint_payload.get("warning_count", 0) > 0 and rc == EXIT_OK:
+            if args.fail_on_warn and lint_payload["warning_count"] > 0 and rc == EXIT_OK:
                 return EXIT_LINT_FAIL
         return rc
 
@@ -149,9 +138,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(lint_payload, ensure_ascii=False))
     else:
         _print_human_lint(lint_payload)
-    if args.fail_on_warn and lint_payload.get("warning_count", 0) > 0:
-        return EXIT_LINT_FAIL
-    return EXIT_OK
+    return EXIT_LINT_FAIL if args.fail_on_warn and lint_payload["warning_count"] > 0 else EXIT_OK
 
 
 if __name__ == "__main__":
