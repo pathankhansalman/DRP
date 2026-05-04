@@ -25,6 +25,9 @@ jobs:
       - name: Install package
         run: pip install .
 
+      - name: Check imports
+        run: python -c "import linter; import tools.drp_validator; print('All imports successful')"
+
       - name: Show version
         run: drp-validate --version
 

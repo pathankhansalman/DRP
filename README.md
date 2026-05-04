@@ -11,6 +11,23 @@ DRP. It is intentionally not an application; it defines the data format,
 the invariants, and the validator that any DRP-compatible system should
 honor.
 
+## Installation
+
+```sh
+pip install .
+```
+
+После установки команда `drp-validate` доступна глобально.
+
+Основные команды:
+
+```sh
+drp-validate <файлы>         - валидация JSON-файлов
+drp-validate --lint <файлы>  - линтинг с предупреждениями
+```
+
+Опции: `--strict`, `--quiet`, `--no-color`, `--version`.
+
 ## Why DRP
 
 Most decision logs degrade into free-form prose that cannot be audited,
@@ -71,7 +88,7 @@ queried, or diffed. DRP fixes this by:
 Validate a file using the reference validator:
 
 ```sh
-python3 tools/drp_validator.py examples/minimal_valid.json
+drp-validate examples/minimal_valid.json
 # or
 ./scripts/drp-validate examples/minimal_valid.json
 ```

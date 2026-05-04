@@ -40,5 +40,5 @@ dev = ["pytest>=7.0", "check-jsonschema>=0.28"]
 py-modules = ["drp_cli", "linter"]
 
 [tool.setuptools.packages.find]
-include = ["tools*"]
+include = ["tools*", "drp_cli", "linter"]
 exclude = ["tests*", "fixtures*", "examples*", "benchmark*", "docs*", "scripts*"]
