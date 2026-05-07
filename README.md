@@ -96,6 +96,7 @@ python3 -m pytest tests/
 
 ## Key documents
 
+- [Grant Evidence Package](docs/GRANT_EVIDENCE.md) - reviewer-facing evidence matrix, reproducible commands, limitations, and research roadmap.
 - [Specification](docs/SPEC.md) - normative definition of the record model.
 - [Validation](docs/VALIDATION.md) - what the validator checks and how.
 - [Design rationale](docs/DESIGN.md) - why DRP looks the way it does.
