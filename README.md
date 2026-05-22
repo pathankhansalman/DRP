@@ -1,15 +1,85 @@
 # Decision Record Protocol (DRP)
 
 DRP is a lightweight, machine-readable protocol for recording decisions as
-immutable, linkable records. A DRP record captures *what* was decided,
-*why*, *what was considered*, and *how* it relates to earlier or later
-decisions. Records form a directed acyclic graph via explicit causal links
-and an explicit supersession relation.
+immutable, linkable records with causal links, validation rules, and explicit
+supersession.
+
+It helps teams and AI systems answer a simple question:
+
+> What was decided, why was it decided, what did it depend on, and what replaced
+> it later?
 
 This repository is the **canonical specification and reference tooling** for
 DRP. It is intentionally not an application; it defines the data format,
 the invariants, and the validator that any DRP-compatible system should
 honor.
+
+## At a glance
+
+DRP gives you:
+
+- structured decision records instead of scattered notes;
+- stable `record_id` values for linking and audit;
+- explicit causal links through `parent_record_ids` and `child_record_ids`;
+- append-only evolution through `supersedes_record_id`;
+- schema checks plus validator-backed graph invariants;
+- runnable examples, fixtures, tests, and benchmark material.
+
+## The problem DRP solves
+
+Many important decisions start as chat messages, tickets, meeting notes, or
+incident comments. Over time, the original context disappears:
+
+- the reason for the decision becomes unclear;
+- the alternatives considered are lost;
+- later changes silently overwrite earlier intent;
+- decision chains become hard to audit or replay;
+- free-form prose cannot reliably enforce graph-level consistency.
+
+DRP turns those decisions into small, structured records that can be validated,
+linked, superseded, tested, and inspected over time.
+
+## Core flow
+
+```mermaid
+flowchart LR
+  A[Decision context] --> B[DRP record]
+  B --> C[Causal links]
+  B --> D[Schema checks]
+  B --> E[Semantic validation]
+  C --> F[Auditable decision history]
+  D --> F
+  E --> F
+  G[Newer decision] --> H[Supersession]
+  H --> F
+```
+
+## When to use DRP
+
+DRP is useful when decisions need to survive beyond a single conversation,
+meeting, or tool run.
+
+Common use cases:
+
+1. **AI agent decision trails** - record why an agent chose a route, which
+   prior records it depended on, and whether the decision was later superseded.
+2. **Incident response and rollback** - preserve emergency decisions,
+   mitigations, follow-up actions, and the causal chain between them.
+3. **Architecture or product decisions** - keep decision history structured
+   while still allowing ADR-style narrative documents around it.
+4. **Policy and governance changes** - represent policy updates without
+   silently rewriting prior records.
+
+## Why not just ADR?
+
+Architecture Decision Records are excellent for human-readable design history.
+DRP is narrower and more mechanical: it defines machine-readable records,
+validation rules, causal graph checks, and supersession semantics.
+
+In practice, DRP can complement ADR:
+
+- ADR explains the narrative.
+- DRP preserves the structured decision state and validation contract.
 
 ## Why DRP
 
@@ -22,6 +92,37 @@ queried, or diffed. DRP fixes this by:
 - shipping a schema **and** a validator, because schema alone cannot express
   graph-level invariants (bidirectional links, timestamp ordering,
   supersession resolution, etc.).
+
+## Try DRP in 60 seconds
+
+Validate a known-good example:
+
+```sh
+python3 tools/drp_validator.py examples/minimal_valid.json
+```
+
+Or use the wrapper:
+
+```sh
+./scripts/drp-validate examples/minimal_valid.json
+```
+
+For CI jobs and tool integrations, use `--json` for machine-readable output:
+
+```sh
+./scripts/drp-validate examples/minimal_valid.json --json
+# {"status": "OK", "record_count": 1, "errors": []}
+```
+
+Run the test suite:
+
+```sh
+python3 -m pytest tests/
+```
+
+Exit code is `0` on success, `1` on validation failure, `2` on unreadable
+input. See [docs/VALIDATION.md](docs/VALIDATION.md) for the full CLI
+contract.
 
 ## Status
 
@@ -64,34 +165,6 @@ queried, or diffed. DRP fixes this by:
 |   +-- drp-validate           - CLI wrapper around the validator
 |   \-- run_benchmark.py       - runs the auditability pack
 \-- tests/                     - automated tests for schema + validator
-```
-
-## Quick start
-
-Validate a file using the reference validator:
-
-```sh
-python3 tools/drp_validator.py examples/minimal_valid.json
-# or
-./scripts/drp-validate examples/minimal_valid.json
-```
-
-For CI jobs and tool integrations, use `--json` for a machine-readable
-result on stdout:
-
-```sh
-./scripts/drp-validate examples/minimal_valid.json --json
-# {"status": "OK", "record_count": 1, "errors": []}
-```
-
-Exit code is `0` on success, `1` on validation failure, `2` on unreadable
-input. See [docs/VALIDATION.md](docs/VALIDATION.md) for the full CLI
-contract.
-
-Run the test suite:
-
-```sh
-python3 -m pytest tests/
 ```
 
 ## Key documents
