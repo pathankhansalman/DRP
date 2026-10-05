@@ -20,11 +20,16 @@ graph TD
 *   **Validation (Pass/Fail):** Done automatically by the reference validator (e.g., `tools/drp_validator.py`). It checks syntactic and graph-level invariants (e.g., correct JSON type, valid timestamps, parent/child bidirectional consistency, and lack of dependency cycles). An invalid record cannot be scored because it violates core DRP protocol semantics.
 *   **Scoring (Quantitative Measure of Quality):** Evaluates the semantic usefulness, completeness, and clarity of valid records. It measures *how easy* it is for a human auditor or automated system to reconstruct the context, motivations, and impact of a decision.
 
+> [!NOTE]
+> Automated and NLP-based evaluations described in this rubric are proposed future implementations and research directions, not guarantees or built-in features of the current repository.
+
 ---
 
 ## 2. Scoring Dimensions
 
-The v0 rubric uses **8 dimensions**. A decision record's total auditability score is the sum of these dimensions, ranging from **0 (extremely poor auditability)** to **22 (maximum auditability)**.
+The v0 rubric defines **8 dimensions**. A decision record's total raw auditability score is the sum of points earned across all applicable dimensions, ranging from **0 (extremely poor auditability)** to **22 (maximum auditability)**.
+
+Certain dimensions do not apply to every record (e.g., root decisions or non-superseding decisions). In those cases, dimensions are marked **N/A** and the final score is normalized (see Section 3.1).
 
 ### Dimension 1: Context Completeness
 *   **What it measures:** The quality and thoroughness of the `context` field in describing *why* the decision is necessary. It looks for background detail, root causes, constraints, and problem parameters.
@@ -64,10 +69,11 @@ The v0 rubric uses **8 dimensions**. A decision record's total auditability scor
 
 ### Dimension 4: Causal Link Quality
 *   **What it measures:** The richness and correctness of the relationship graph expressed through `parent_record_ids` and `child_record_ids`.
-*   **Score Range:** 0 to 3
+*   **Score Range:** 0 to 3 (or **N/A**)
 *   **Evaluation Method:** Both (Validator checks graph invariants automatically; human/LLM verifies if the referenced parent decisions actually have a logical, causal relationship to the current decision).
+*   **N/A Applicability:** A root/foundational decision introducing an initial subsystem has no prior decisions to link. When evaluating an initial root decision, mark this dimension **N/A** (excluded from the applicable maximum score) rather than penalizing it with 0 points.
 *   **Rubric Details:**
-    *   **0 (Unacceptable):** The record has zero causal links (`parent_record_ids` and `child_record_ids` are empty) despite representing a modification of an existing system feature.
+    *   **0 (Unacceptable):** The record has zero causal links (`parent_record_ids` and `child_record_ids` are empty) despite representing a modification or continuation of an existing system feature.
     *   **1 (Low):** Lists links, but they are either logically weak or point to irrelevant decisions just to fill the field.
     *   **2 (Medium):** Explicitly links to direct parent motivating decisions, creating a clear history trail (e.g., pointing to the decision that originally provisioned the `db.t3.medium` RDS instance).
     *   **3 (High):** Links both upstream motivating parents AND downstream impacted children. The relationships are clearly explained in the `rationale` (e.g., `"This decision is a direct mitigation of dec-102 (RDS provisioning) and will motivate dec-106 (pool monitoring rules)."`).
@@ -76,8 +82,9 @@ The v0 rubric uses **8 dimensions**. A decision record's total auditability scor
 
 ### Dimension 5: Supersession Clarity
 *   **What it measures:** The explicit linking and state transition of replaced decisions.
-*   **Score Range:** 0 to 3
+*   **Score Range:** 0 to 3 (or **N/A**)
 *   **Evaluation Method:** Both (Validator automatically ensures `supersedes_record_id` is present if status is `"superseded"`; manual/LLM checks if the rationale describes *why* the old decision is being superseded).
+*   **N/A Applicability:** A decision that introduces a brand new capability or policy without replacing or obsoleting any prior decision should be marked **N/A** (excluded from the applicable maximum score). Only decisions that intend to replace, refine, or deprecate an existing decision are evaluated on this dimension.
 *   **Rubric Details:**
     *   **0 (Unacceptable):** Replaces/renders an older decision obsolete but does *not* set `status: "superseded"` or provide a `supersedes_record_id`.
     *   **1 (Low):** Declares `supersedes_record_id` but provides no rationale as to why the previous decision failed or is being retired.
@@ -126,13 +133,33 @@ The v0 rubric uses **8 dimensions**. A decision record's total auditability scor
 | :--- | :--- | :---: | :---: | :--- |
 | **1. Context Completeness** | Explains *why* the decision is necessary | 0 | 3 | Manual / NLP |
 | **2. Decision Clarity** | Explains *what* has been decided and done | 0 | 3 | Manual |
-| **3. Options Coverage** | Breath of alternatives considered | 0 | 3 | Both |
-| **4. Causal Link Quality** | Upstream & downstream relationship graph | 0 | 3 | Both |
-| **5. Supersession Clarity** | Replaced decisions and rationales | 0 | 3 | Both |
+| **3. Options Coverage** | Breadth of alternatives considered | 0 | 3 | Both |
+| **4. Causal Link Quality** | Upstream & downstream relationship graph | 0 | 3 (or N/A) | Both |
+| **5. Supersession Clarity** | Replaced decisions and rationales | 0 | 3 (or N/A) | Both |
 | **6. Timestamp/Ordering** | Chronological and topological alignment | 0 | 2 | Both |
 | **7. Machine-Checkability**| Use of `impact`, `tags`, and `metadata` | 0 | 2 | Automatic |
 | **8. Ambiguity Risk** | Absence of vague/hand-waving phrases | 0 | 3 | Manual / NLP |
 | **TOTAL** | **Auditability Index (Higher is better)** | **0** | **22** | |
+
+---
+
+### 3.1 N/A Handling & Normalized Scoring Formula
+
+Not every decision record requires every dimension:
+* **Root Decisions:** A foundational or initial decision record has no parent links; it should not be penalized for having empty `parent_record_ids`.
+* **Standalone / New Decisions:** A decision that introduces an original policy or architecture without replacing an existing decision has no supersession requirement; it should not be penalized for not having `supersedes_record_id` or `status: "superseded"`.
+
+#### Normalized Score Calculation
+When a dimension does not apply to a record, it must be marked **`N/A`** and its points are excluded from the denominator (applicable maximum). The final auditability score is normalized on a 0–100 scale:
+
+$$\text{Final Auditability Score} = \left(\frac{\text{Earned Points}}{\text{Applicable Maximum}}\right) \times 100$$
+
+* **Full 8-dimension record:** Applicable maximum is **22 points**.
+* **Root decision (Dimension 4 is N/A):** Applicable maximum is **19 points** ($22 - 3$).
+* **Standalone new decision (Dimension 5 is N/A):** Applicable maximum is **19 points** ($22 - 3$).
+* **Initial standalone decision (Dimensions 4 & 5 are N/A):** Applicable maximum is **16 points** ($22 - 6$).
+
+This ensures records are evaluated fairly against the documentation requirements that legitimately apply to them.
 
 ---
 
